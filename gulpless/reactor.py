@@ -4,10 +4,6 @@ from gulpless.collector import Collector
 
 import watchdog.observers
 import logging
-try:
-    import thread
-except ImportError:
-    import _thread as thread
 import time
 import os
 
@@ -29,6 +25,7 @@ class Reactor(object):
         self._outputs = {}  # maps outputs to their input
         self._handlers = []  # a list of file handlers
         self._initial = True  # whether this is the first run or not
+        self._once = False
 
     def add_handler(self, handler):
         self._handlers.append(handler)
@@ -36,25 +33,27 @@ class Reactor(object):
     def start(self):
         self._collector.start()
         self._observer.start()
+        self.running = True
+
+    def stop(self):
+        self._observer.stop()
+        self._collector.stop()
+        self.running = False
 
     def join(self, timeout=None):
         self._observer.join()
         self._collector.join()
 
-    def stop(self):
-        self._observer.stop()
-        self._collector.stop()
-
-    def run(self):
-        try:
-            self.start()
-            while True:
+    def run(self, once=False):
+        """Runs the reactor in the main thread."""
+        self._once = once
+        self.start()
+        while self.running:
+            try:
                 time.sleep(1.0)
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self.stop()
-            self.join()
+            except KeyboardInterrupt:
+                self.stop()
+                self.join()
 
     def _parents(self, path):
         if path.endswith(os.sep):
@@ -136,8 +135,7 @@ class Reactor(object):
                 if self._inputs[path]:
                     # file can be processed by at least one handler
                     for handler, outputs in self._inputs[path]:
-                        handler.build(self._src_path, path,
-                                      self._dest_path, outputs)
+                        handler.changed(self._src_path, path, self._dest_path)
                 else:
                     # no handlers accept the current version of this file
                     del self._inputs[path]
@@ -160,6 +158,8 @@ class Reactor(object):
                 self._batch_src(src_updated, src_deleted)
                 self._batch_dest(dest_updated, dest_deleted)
                 self._initial = False
+                if self._once:
+                    self.stop()
             else:
                 # after the initial batch is complete and we have a list of
                 # outputs, we'll delete first and ask questions later
@@ -168,4 +168,4 @@ class Reactor(object):
 
         except Exception:
             logging.exception("Run-time error")
-            thread.interrupt_main()
+            self.stop()

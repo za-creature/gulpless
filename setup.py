@@ -7,7 +7,7 @@ setup(name="gulpless",
       description="Simple python build system",
       author="Radu Dan",
       author_email="za_creature@yahoo.com",
-      url="http://git.full-throttle.ro/radu/gulpless",
+      url="https://github.com/za-creature/gulpless",
       packages=["gulpless"],
       install_requires=["watchdog", "termcolor", "pathtools", "argparse"],
       entry_points={"console_scripts": ["gulpless=gulpless:main"]})

@@ -6,7 +6,7 @@ Here be dragons. You have been warned!
 
 If that's not enough to ward you off, you should probably know that the average `build.py` module will always contain an order of magnitude more code than configuration directives, which may or may not be what you're looking for. Usually, it's not.
 
-For a usage example, check out `example/build.py`:
+For a usage example, check out [examples/build.py]:
 
 * compiles typescript and less files
 * stitches together javascripts [major hack; you should probably delete the whole class]

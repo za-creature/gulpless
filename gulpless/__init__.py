@@ -10,6 +10,7 @@ __all__ = ["Handler", "TreeHandler", "Reactor", "gzip"]
 
 def main():
     """Entry point for command line usage."""
+    import colorama
     import argparse
     import logging
     import sys
@@ -39,6 +40,7 @@ def main():
     args = parser.parse_args()
     os.chdir(args.directory)
     sys.path.append(os.getcwd())
+    colorama.init()
 
     try:
         old, sys.dont_write_bytecode = sys.dont_write_bytecode, True

@@ -104,10 +104,18 @@ class Handler(object):
             try:
                 self.build(input_path, output_paths)
             except Exception as e:
-                logging.error("{0} failed after {1:.2f}s: {2}".format(
-                    termcolor.colored(path, "red", attrs=["bold"]),
-                    time.time() - start, e.args[0]
-                ))
+                if isinstance(e, EnvironmentError):
+                    # non-zero return code in sub-process; only show message
+                    logging.error("{0} failed after {1:.2f}s: {2}".format(
+                        termcolor.colored(path, "red", attrs=["bold"]),
+                        time.time() - start, e.args[0]
+                    ))
+                else:
+                    # probably a bug in the handler; show full trace
+                    logging.exception("{0} failed after {1:.2f}s".format(
+                        termcolor.colored(path, "red", attrs=["bold"]),
+                        time.time() - start
+                    ))
                 self.failures[path] = start
             else:
                 logging.info("{0} completed in {1:.2f}s".format(

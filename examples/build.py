@@ -14,6 +14,21 @@ import re
 import os
 
 
+UGLIFY = "uglifyjs"
+TSC = "tsc"
+LESSC = "lessc"
+AUTOPREFIXER = "autoprefixer"
+IMAGEMIN = "imagemin"
+
+
+if os.name != "posix":
+    UGLIFY += ".cmd"
+    TSC += ".cmd"
+    LESSC += ".cmd"
+    AUTOPREFIXER += ".cmd"
+    IMAGEMIN += ".cmd"
+
+
 class JavascriptHandler(gulpless.TreeHandler):
     include = re.compile("///.*?<reference\s+path=[\"\'](.*)[\"\']\s*/>", re.I)
 
@@ -26,7 +41,7 @@ class JavascriptHandler(gulpless.TreeHandler):
 
         # concatenate and minify
         imports = set()
-        cmdline = ["uglifyjs" if os.name == "posix" else "uglifyjs.cmd"]
+        cmdline = [UGLIFY]
         current = os.path.dirname(input_path)
 
         for line in open(input_path):
@@ -41,20 +56,21 @@ class JavascriptHandler(gulpless.TreeHandler):
                     imports.add(path)
                     cmdline.append(path.replace(os.sep, "/"))
         if len(cmdline) == 1:
-            raise ValueError("Nothing to build")
+            raise EnvironmentError("Nothing to build")
 
         cmdline += ["--source-map", smap,
                     "--source-map-url", os.path.basename(smap),
                     "--source-map-include-sources",
                     "--prefix", str(input_path.count(os.sep)),
-                    "--compress", "warnings=false",
+                    "--compress", "warnings=false,drop_debugger=false",
                     "--mangle"]
         try:
             if subprocess.call(cmdline, stdout=open(js, "wb")) != 0:
-                raise ValueError("Non-zero exit code in uglifyjs")
-        except OSError:
-            raise ValueError("Unable to start uglifyjs. Did you run "
-                             "`npm install -g uglify-js` ?")
+                raise EnvironmentError("Non-zero exit code in "
+                                       "{0}".format(UGLIFY))
+        except EnvironmentError:
+            raise EnvironmentError("Unable to start {0}. Did you run `npm "
+                                   "install -g uglify-js` ?".format(UGLIFY))
 
         # gzip
         gulpless.gzip(js, js_gz, 6)
@@ -73,35 +89,34 @@ class TypescriptHandler(gulpless.TreeHandler):
         js, js_gz, smap, smap_gz = output_paths
 
         # compile
-        cmdline = ["tsc" if os.name == "posix" else "tsc.cmd",
-                   input_path,
+        cmdline = [TSC, input_path,
                    "--out", js,
                    "--sourcemap",
                    "--sourceRoot", "."]
         try:
             if subprocess.call(cmdline) != 0:
-                raise ValueError("Non-zero exit code in tsc")
-        except OSError:
-            raise ValueError("Unable to start tsc. Did you run "
-                             "`npm install -g typescript` ?")
+                raise EnvironmentError("Non-zero exit code in {0}".format(TSC))
+        except EnvironmentError:
+            raise EnvironmentError("Unable to start {0}. Did you run "
+                                   "`npm install -g typescript` ?".format(TSC))
 
         # uglify
-        cmdline = ["uglifyjs" if os.name == "posix" else "uglifyjs.cmd",
-                   js,
+        cmdline = [UGLIFY, js,
                    "--in-source-map", smap,
                    "--source-map", smap,
                    "--source-map-url", os.path.basename(smap),
                    "--source-map-include-sources",
                    "--prefix", "relative",
-                   "--compress", "warnings=false",
+                   "--compress", "warnings=false,drop_debugger=false",
                    "--mangle",
                    "--output", js]
         try:
             if subprocess.call(cmdline) != 0:
-                raise ValueError("Non-zero exit code in uglifyjs")
-        except OSError:
-            raise ValueError("Unable to start uglifyjs. Did you run "
-                             "`npm install -g uglify-js` ?")
+                raise EnvironmentError("Non-zero exit code in "
+                                       "{0}".format(UGLIFY))
+        except EnvironmentError:
+            raise EnvironmentError("Unable to run {0}. Did you run `npm "
+                                   "install -g uglify-js` ?".format(UGLIFY))
 
         # gzip
         gulpless.gzip(js, js_gz, 6)
@@ -120,7 +135,7 @@ class LessHandler(gulpless.TreeHandler):
         css, css_gz, smap, smap_gz = output_paths
 
         # compile
-        cmdline = ["lessc" if os.name == "posix" else "lessc.cmd",
+        cmdline = [LESSC,
                    "--source-map={0}".format(smap),
                    "--source-map-url={0}".format(os.path.basename(smap)),
                    "--source-map-less-inline",
@@ -129,23 +144,26 @@ class LessHandler(gulpless.TreeHandler):
                    css]
         try:
             if subprocess.call(cmdline) != 0:
-                raise ValueError("Non-zero exit code in lessc")
-        except OSError:
-            raise ValueError("Unable to start lessc. Did you run "
-                             "`npm install -g less` ?")
+                raise EnvironmentError("Non-zero exit code in "
+                                       "{0}".format(LESSC))
+        except EnvironmentError:
+            raise EnvironmentError("Unable to start {0}. Did you run `npm "
+                                   "install -g less` ?".format(LESSC))
 
         # autoprefix
-        cmdline = ["autoprefixer" + ("" if os.name == "posix" else ".cmd"),
+        cmdline = [AUTOPREFIXER,
                    css,
                    "--map",
                    "--no-cascade",
                    "--output", css]
         try:
             if subprocess.call(cmdline) != 0:
-                raise ValueError("Non-zero exit code in autoprefixer")
-        except OSError:
-            raise ValueError("Unable to start autoprefixer. Did you run "
-                             "`npm install -g autoprefixer` ?")
+                raise EnvironmentError("Non-zero exit code in "
+                                       "{0}".format(AUTOPREFIXER))
+        except EnvironmentError:
+            raise EnvironmentError("Unable to start {0}. Did you run `npm "
+                                   "install -g autoprefixer` "
+                                   "?".format(AUTOPREFIXER))
 
         # gzip
         gulpless.gzip(css, css_gz, 6)
@@ -171,17 +189,17 @@ class ImageHandler(gulpless.Handler):
         output_path, = output_paths
 
         # minify
-        cmdline = ["imagemin" if os.name == "posix" else "imagemin.cmd",
-                   input_path,
+        cmdline = [IMAGEMIN, input_path,
                    "--interlaced",
                    "--optimizationLevel", "3",
                    "--progressive"]
         try:
             if subprocess.call(cmdline, stdout=open(output_path, "wb")) != 0:
-                raise ValueError("Non-zero exit code in imagemin")
-        except OSError:
-            raise ValueError("Unable to start imagemin. Did you run "
-                             "`npm install -g imagemin` ?")
+                raise EnvironmentError("Non-zero exit code in "
+                                       "{0}".format(IMAGEMIN))
+        except EnvironmentError:
+            raise EnvironmentError("Unable to start {0}. Did you run `npm "
+                                   "install -g imagemin` ?".FORMAT(IMAGEMIN))
 
 # project configuration
 SRC = "resources/"

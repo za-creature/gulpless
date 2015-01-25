@@ -29,7 +29,17 @@ class Proxy(watchdog.events.FileSystemEventHandler):
         for path in list(self.files):
             isdir = path.endswith(os.sep)
             abspath = os.path.join(self.path, path)
-            if not os.path.exists(abspath) or os.path.isdir(abspath) != isdir:
+            try:
+                is_deleted = (
+                    not os.path.exists(abspath) or  # actually deleted
+                    os.path.isdir(abspath) != isdir  # changed from / to folder
+                )
+            except EnvironmentError:
+                # file is basically inaccessible at this point so we're gonna
+                # assume that it was deleted
+                is_deleted = True
+
+            if is_deleted:
                 deleted.append(path)
                 del self.files[path]
 
@@ -45,19 +55,26 @@ class Proxy(watchdog.events.FileSystemEventHandler):
                     changed.append(path)
 
             for path in subfiles:
-                path = os.path.join(folder, path)
-                mtime = os.path.getmtime(path)
+                actual_path = path = os.path.join(folder, path)
                 path = os.path.normcase(os.path.relpath(path, self.path))
+                try:
+                    mtime = os.path.getmtime(actual_path)
+                    if path not in self.files:
+                        # new file; set its mtime to 0 because it will be
+                        # compared in the next few lines
+                        self.files[path] = 0
 
-                if path not in self.files:
-                    # new file; set its mtime to 0 because it will be compared
-                    # in the next few lines
-                    self.files[path] = 0
-
-                if mtime > self.files[path]:
-                    # file has been changed since last check
-                    self.files[path] = mtime
-                    changed.append(path)
+                    if mtime > self.files[path]:
+                        # file has been changed since last check
+                        self.files[path] = mtime
+                        changed.append(path)
+                except EnvironmentError:
+                    # in 99% of the cases the file has been deleted while
+                    # iterating the parent folder; if the file was previously
+                    # being handled, then stop handling it; otherwise ignore
+                    if path in self.files:
+                        deleted.append(path)
+                        del self.files[path]
 
         self.updated = False
         return changed, deleted

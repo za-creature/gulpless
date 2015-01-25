@@ -60,7 +60,14 @@ class Handler(object):
         is the output folder. The default implementation calls `build` after
         determining that the input file is newer than any of the outputs, or
         any of the outputs does not exist."""
-        self._build(src, path, dest, os.path.getmtime(os.path.join(src, path)))
+        try:
+            mtime = os.path.getmtime(os.path.join(src, path))
+            self._build(src, path, dest, mtime)
+        except EnvironmentError as e:
+            logging.error("{0} is inaccessible: {1}".format(
+                termcolor.colored(path, "yellow", attrs=["bold"]),
+                e.args[0]
+            ))
 
     def _outputs(self, src, path):
         return [path + suffix for suffix in self.suffixes]
@@ -75,32 +82,40 @@ class Handler(object):
         output_paths = [os.path.join(dest, output) for output in
                         self._outputs(src, path)]
 
+        if path in self.failures and mtime <= self.failures[path]:
+            # the input file was not modified since the last recorded failure
+            # as such, assume that the task will fail again and skip it
+            return
+
         for output in output_paths:
-            if (
-                # input changed since last recorded failure
-                path not in self.failures or
-                mtime > self.failures[path]
-            ) and (
-                # output deleted older than last modification of input
-                not os.path.exists(output) or
-                mtime > os.path.getmtime(output)
-            ):
-                start = time.time()
-                try:
-                    self.build(input_path, output_paths)
-                except Exception as e:
-                    logging.error("{0} failed after {1:.2f}s: {2}".format(
-                        termcolor.colored(path, "red", attrs=["bold"]),
-                        time.time() - start, e.args[0]
-                    ))
-                    self.failures[path] = start
-                else:
-                    logging.info("{0} completed in {1:.2f}s".format(
-                        termcolor.colored(path, "green", attrs=["bold"]),
-                        time.time() - start
-                    ))
-                    self.failures.pop(path, None)
-                break
+            try:
+                if \
+                        os.path.exists(output) and \
+                        mtime <= os.path.getmtime(output):
+                    # output file exists and is up to date; no need to trigger
+                    # build on this file's expense
+                    continue
+            except EnvironmentError:
+                # usually happens when the output file has been deleted in
+                # between the call to exists and the call to getmtime
+                pass
+
+            start = time.time()
+            try:
+                self.build(input_path, output_paths)
+            except Exception as e:
+                logging.error("{0} failed after {1:.2f}s: {2}".format(
+                    termcolor.colored(path, "red", attrs=["bold"]),
+                    time.time() - start, e.args[0]
+                ))
+                self.failures[path] = start
+            else:
+                logging.info("{0} completed in {1:.2f}s".format(
+                    termcolor.colored(path, "green", attrs=["bold"]),
+                    time.time() - start
+                ))
+                self.failures.pop(path, None)
+            break
 
     def build(self, input_path, output_paths):
         """Should be extended by subclasses to actually do stuff. By default
@@ -135,7 +150,7 @@ class TreeHandler(Handler):
             filename = os.path.join(src, path)
             mtime = os.path.getmtime(filename)
             contents = open(filename)
-        except IOError:
+        except EnvironmentError:
             raise ValueError("Unable to open '{0}'".format(path))
 
         if \

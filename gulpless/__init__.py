@@ -40,7 +40,14 @@ def main():
     args = parser.parse_args()
     os.chdir(args.directory)
     sys.path.append(os.getcwd())
-    colorama.init()
+
+    if os.environ.get("TERM") == "cygwin":
+        # colorama doesn't play well with git bash
+        del os.environ["TERM"]
+        colorama.init()
+        os.environ["TERM"] = "cygwin"
+    else:
+        colorama.init()
 
     try:
         old, sys.dont_write_bytecode = sys.dont_write_bytecode, True

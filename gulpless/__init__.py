@@ -20,7 +20,7 @@ def main():
                                      description="Simple build system.")
     parser.add_argument("-v", "--version",
                         action="version",
-                        version="%(prog)s 0.7")
+                        version="%(prog)s 0.7.6")
     parser.add_argument("-d", "--directory",
                         action="store",
                         default=os.getcwd(),
